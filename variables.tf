@@ -11,7 +11,7 @@ variable "ssh_key" {
 }
 
 variable "proxmox_host" {
-    default = "prox-1u"
+    default = "pv02"
 }
 variable "template_name" {
     default = "ubuntu-2404-cloudinit-template"
