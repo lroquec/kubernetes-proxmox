@@ -9,3 +9,10 @@ variable "ssh_key" {
   type        = string
   default     = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIE/Pjg7YXZ8Yau9heCc4YWxFlzhThnI+IhUx2hLJRxYE Cloud-Init@Terraform"
 }
+
+variable "proxmox_host" {
+    default = "prox-1u"
+}
+variable "template_name" {
+    default = "ubuntu-2404-cloudinit-template"
+}
