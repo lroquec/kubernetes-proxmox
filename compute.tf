@@ -1,6 +1,6 @@
 resource "proxmox_vm_qemu" "cloudinit-example" {
   count = 3
-  vmid        = 100
+  vmid = "40${count.index + 1}"
   name        = "kubeadm-vm-${count.index + 1}"
   target_node = var.proxmox_host
   agent       = 1
