@@ -63,7 +63,7 @@ mkdir /var/lib/vz/snippets
 Now that we have a place to store the snippet, we can create the snippet itself. The following command will create a snippet that installs the `qemu-guest-agent.yml` package:
 
 ```bash
-tee /var/lib/vz/snippets/qemu-guest-agent.yml <<EOF
+tee /var/lib/vz/snippets/kubeadm-cluster.yml <<EOF
 #cloud-config
 runcmd:
   - apt update
