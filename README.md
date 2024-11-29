@@ -33,7 +33,7 @@ sudo virt-customize -a ubuntu-24.04-server-cloudimg-amd64.img --install qemu-gue
 Before we can import the Cloud-Init image, we need to create a VM to give the image to. The following command will create a new VM with the ID `9000`:
 
 ```bash
-sudo qm create 9000 --name "ubuntu-2404-cloudinit-template" --memory 2048 --cores 2 --net0 virtio,bridge=vmbr0
+sudo qm create 9000 --name "ubuntu-2404-cloudinit-template" --memory 4096 --cores 4 --net0 virtio,bridge=vmbr0
 sudo qm importdisk 9000 ubuntu-24.04-server-cloudimg-amd64.img local-lvm
 sudo qm set 9000 --scsihw virtio-scsi-pci --scsi0 local-lvm:vm-9000-disk-0
 sudo qm set 9000 --boot c --bootdisk scsi0
