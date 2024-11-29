@@ -1,43 +1,31 @@
-resource "proxmox_vm_qemu" "cloudinit-example" {
-  count            = 3
+resource "proxmox_vm_qemu" "cloudinit-k8s" {
+  count            = 1
   vmid             = "40${count.index + 1}"
   name             = "kubeadm-vm-${count.index + 1}"
   target_node      = var.proxmox_host
   agent            = 1
   cores            = 2
   memory           = 2048
-  boot             = "order=scsi0" # has to be the same as the OS disk of the template
-  clone            = var.template  # The name of the template
-  scsihw           = "virtio-scsi-single"
-  vm_state         = "running"
+  bootdisk         = "scsi0"           # has to be the same as the OS disk of the template
+  clone            = var.template_name # The name of the template
+  scsihw           = "virtio-scsi-pci"
   automatic_reboot = true
+  os_type = "cloud-init"
 
   # Cloud-Init configuration
   cicustom   = "vendor=local:snippets/kubeadm-cluster.yml" # /var/lib/vz/snippets/kubeadm-cluster.yml
-  ciupgrade  = true
   nameserver = "1.1.1.1 8.8.8.8"
   ipconfig0  = "ip4=dhcp,ip6=dhcp"
-  skip_ipv6  = true
   ciuser     = "root"
   cipassword = var.root_password
   sshkeys    = var.ssh_key
 
-  # Most cloud-init images require a serial device for their display
-  serial {
-    id = 0
-  }
-
-  disks {
-    scsi {
-      scsi0 {
-        # We have to specify the disk from our template, else Terraform will think it's not supposed to be there
-        disk {
-          storage = "local-lvm"
-          # The size of the disk should be at least as big as the disk in the template. If it's smaller, the disk will be recreated
-          size = "10G"
-        }
-      }
-    }
+  disk {
+    slot     = 0
+    size     = "10G"
+    type     = "scsi"
+    storage  = "local-lvm"
+    iothread = 1
   }
 
   network {
