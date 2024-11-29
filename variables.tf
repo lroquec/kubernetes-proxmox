@@ -2,7 +2,7 @@ variable "root_password" {
   description = "The root password for the VM"
   type        = string
   default     = "Enter123!"
-  
+
 }
 variable "ssh_key" {
   description = "The SSH key for the VM"
@@ -11,8 +11,8 @@ variable "ssh_key" {
 }
 
 variable "proxmox_host" {
-    default = "pv02"
+  default = "pv02"
 }
 variable "template_name" {
-    default = "ubuntu-2404-cloudinit-template"
+  default = "ubuntu-2404-cloudinit-template"
 }
