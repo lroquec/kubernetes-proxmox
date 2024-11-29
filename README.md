@@ -19,7 +19,7 @@ wget https://cloud-images.ubuntu.com/releases/24.04/release/ubuntu-24.04-server-
 ### Install the tools for customize the image
 
 ```bash
-sudo apt update -y && sudo apt install libguestfs-tools -y
+apt update -y && apt install libguestfs-tools -y
 ```
 
 ### Install qemu-guest-agent
@@ -34,10 +34,10 @@ Before we can import the Cloud-Init image, we need to create a VM to give the im
 
 ```bash
 sudo qm create 9000 --name "ubuntu-2404-cloudinit-template" --memory 2048 --cores 2 --net0 virtio,bridge=vmbr0
-sudo qm importdisk 9000 ubuntu-24.04-server-cloudimg-amd64.img local-zfs
-sudo qm set 9000 --scsihw virtio-scsi-pci --scsi0 local-zfs:vm-9000-disk-0
+sudo qm importdisk 9000 ubuntu-24.04-server-cloudimg-amd64.img local-lvm
+sudo qm set 9000 --scsihw virtio-scsi-pci --scsi0 local-lvm:vm-9000-disk-0
 sudo qm set 9000 --boot c --bootdisk scsi0
-sudo qm set 9000 --ide2 local-zfs:cloudinit
+sudo qm set 9000 --ide2 local-lvm:cloudinit
 sudo qm set 9000 --serial0 socket --vga serial0
 sudo qm set 9000 --agent enabled=1
 ```
@@ -99,3 +99,11 @@ pveum aclmod / -user terraform-prov@pve -role TerraformProv
 export PM_USER="terraform-prov@pve"
 export PM_PASS="password"
 ```
+
+https://github.com/Telmate/terraform-provider-proxmox/blob/master/docs/guides/cloud_init.md
+
+https://github.com/kodekloudhub/certified-kubernetes-administrator-course/blob/master/docs/11-Install-Kubernetes-the-kubeadm-way/04-Demo-Deployment-with-Kubeadm.md
+
+https://austinsnerdythings.com/2021/09/23/deploying-kubernetes-vms-in-proxmox-with-terraform/
+
+https://austinsnerdythings.com/2022/04/25/deploying-a-kubernetes-cluster-within-proxmox-using-ansible/
