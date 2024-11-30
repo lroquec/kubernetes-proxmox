@@ -1,10 +1,12 @@
-# Cloud-Init Getting Started
+# Set up Kubernetes cluster in Proxmox with Terraform and Cloud-Init
 
-This guide will help you get started with Cloud-Init on Proxmox Virtual Environment `PVE`. Cloud Init is a multi-distribution package that handles early initialization of a virtual machine. It is used for configuring the hostname, setting up SSH keys, and other tasks that need to be done before the virtual machine is ready for use.
+This guide will help you deploy en kubernetes cluster through Kubeadm. The virtual machines for the cluster will be provisioned using Terraform and Cloud-Init on Proxmox Virtual Environment `PVE`. 
 
-Note: **all command are performed from the PVE shell**.
+1. Use Terraform for creating the different VMs in Proxmox from a template from Ubuntu 24.04 LTS.
+2. Cloud Init is a multi-distribution package that handles early initialization of a virtual machine. We use it to initialize the VMs with all the configs and packages necessary for kubeadm.
+3. Use kubeadm for setting up a Kubernets cluster.
 
-## Creating a Cloud Init Template
+## Creating a Cloud-Init Template
 
 Before you can use Cloud-Init, you need to create a template that will be used to clone new virtual machines. This template will have the Cloud-Init package installed and configured. The following steps will guide you through creating a Cloud Init template:
 
@@ -42,8 +44,6 @@ sudo qm set 9000 --serial0 socket --vga serial0
 sudo qm set 9000 --agent enabled=1
 ```
 
-Note: **Terraform is meant to manage the full life cycle of the VM, therefore we won't make any further changes to the VM**.
-
 ### Creating a Template from the VM
 
 Now that we have the Cloud-Init image imported, we can create a template from the VM. The following command will convert the VM with ID `9000` to a template:
@@ -52,58 +52,155 @@ Now that we have the Cloud-Init image imported, we can create a template from th
 qm template 9000
 ```
 
-## Creating a Snippet
+## Creating a Snippet for installing and configuring requirements for a kubeadm successful installation.
 
-Snippets are used to pass additional configuration to the Cloud-Init package. For this guide we will create a snippet that ensures the `qemu-guest-agent` package is installed on the virtual machine. Before we can create a snippet, we need to create a place to store it. Preferably in the same storage as the template. Do keep in mind that the cloned VMs can't start if the snippet is not accessible. Throughout this guide we will use the `local` storage.
+Snippets are used to pass additional configuration to the Cloud-Init package. Before we can create a snippet, we need to create a place to store it. Preferably in the same storage as the template. Do keep in mind that the cloned VMs can't start if the snippet is not accessible. Throughout this guide we will use the `local` storage on Proxmox node.
 
 ```bash
 mkdir /var/lib/vz/snippets
 ```
 
-Now that we have a place to store the snippet, we can create the snippet itself. The following command will create a snippet that installs the `qemu-guest-agent.yml` package:
+Now that we have a place to store the snippet, we can create the snippet itself. The following command will create a snippet that sets up a user and installs the `kubeadm` necessary requirements:
 
 ```bash
 tee /var/lib/vz/snippets/kubeadm-cluster.yml <<EOF
 #cloud-config
+users:
+  - name: laura
+    gecos: Laura
+    shell: /bin/bash
+    sudo: ALL=(ALL) NOPASSWD:ALL
+    lock_passwd: false
+    passwd: pass ## hash generado con openssl passwd -6 "tu_contraseña"
+    ssh_authorized_keys: 
+      - ssh-ed25519 resto de tu llave publica
+ 
+chpasswd:
+  expire: false
+
+preserve_hostname: false
+manage_etc_hosts: true
+
 runcmd:
+  - rm -f /etc/machine-id
+  - rm -f /var/lib/dbus/machine-id
+  - systemd-machine-id-setup
+  - rm -f /etc/ssh/ssh_host_*
+  - dpkg-reconfigure openssh-server
   - apt update
-  - apt install -y containerd
+  - swapoff -a
+  - sed -i '/ swap / s/^\(.*\)$/#\1/g' /etc/fstab
+  - echo "overlay" | sudo tee -a /etc/modules-load.d/containerd.conf
+  - echo "br_netfilter" | sudo tee -a /etc/modules-load.d/containerd.conf
+  - modprobe overlay
+  - modprobe br_netfilter
+  - echo "net.bridge.bridge-nf-call-ip6tables = 1" | sudo tee -a /etc/sysctl.d/kubernetes.conf
+  - echo "net.bridge.bridge-nf-call-iptables = 1" | sudo tee -a /etc/sysctl.d/kubernetes.conf
+  - echo "net.ipv4.ip_forward = 1" | sudo tee -a /etc/sysctl.d/kubernetes.conf
+  - sysctl --system
+  - curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmour -o /etc/apt/trusted.gpg.d/docker.gpg
+  - add-apt-repository "deb [arch=amd64] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable"
+  - apt update
+  - apt install -y containerd.io
+  - containerd config default | tee /etc/containerd/config.toml >/dev/null 2>&1
+  - sed -i 's/SystemdCgroup \= false/SystemdCgroup \= true/g' /etc/containerd/config.toml
+  - systemctl restart containerd
   - systemctl enable --now containerd
   - apt-get install -y apt-transport-https ca-certificates curl gpg
-  - curl -fsSL https://pkgs.k8s.io/core:/stable:/v1.31/deb/Release.key | sudo gpg --dearmor -o /etc/apt/keyrings/kubernetes-apt-keyring.gpg
-  - echo 'deb [signed-by=/etc/apt/keyrings/kubernetes-apt-keyring.gpg] https://pkgs.k8s.io/core:/stable:/v1.31/deb/ /' | sudo tee /etc/apt/sources.list.d/kubernetes.list
+  - curl -fsSL https://pkgs.k8s.io/core:/stable:/v1.30/deb/Release.key | sudo gpg --dearmor -o /etc/apt/keyrings/kubernetes-apt-keyring.gpg
+  - echo 'deb [signed-by=/etc/apt/keyrings/kubernetes-apt-keyring.gpg] https://pkgs.k8s.io/core:/stable:/v1.30/deb/ /' | sudo tee /etc/apt/sources.list.d/kub>
   - apt-get update
   - apt-get install -y kubelet kubeadm kubectl
   - apt-mark hold kubelet kubeadm kubectl
   - systemctl enable --now kubelet
 EOF
 ```
+### Explanation of Commands for Kubernetes Setup on Ubuntu
 
-## Creating the Proxmox user and role for terraform
-The particular privileges required may change but here is a suitable starting point rather than using cluster-wide Administrator rights
+Below is a detailed explanation of the commands used for preparing a system to install Kubernetes with `kubeadm`:
 
-Log into the Proxmox cluster or host using ssh (or mimic these in the GUI) then:
+#### Clear Machine Identifiers and regenerate ssh hosts keys. This is the only step that is not a requirement from Kubernetes but recommended of you use image clones as we do.
+- `rm -f /etc/machine-id`: Deletes the existing machine ID to reset it.
+- `rm -f /var/lib/dbus/machine-id`: Deletes the D-Bus machine ID for consistency with the system's new identity.
+- `systemd-machine-id-setup`: Regenerates the system's machine ID.
+- `rm -f /etc/ssh/ssh_host_*`: Removes old SSH host keys.
+- `dpkg-reconfigure openssh-server`: Reconfigures the OpenSSH server and regenerates host keys.
 
-Create a new role for the future terraform user.
-Create the user "terraform-prov@pve"
-Add the TERRAFORM-PROV role to the terraform-prov user
+#### Update System Packages
+- `apt update`: Updates the local package index to ensure access to the latest package versions.
+
+#### Disable and Remove Swap
+- `swapoff -a`: Temporarily disables swap space, which is required for Kubernetes.
+- `sed -i '/ swap / s/^\(.*\)$/#\1/g' /etc/fstab`: Permanently disables swap by commenting out its entry in `/etc/fstab`.
+
+#### Load Required Kernel Modules
+- `echo "overlay" | sudo tee -a /etc/modules-load.d/containerd.conf`: Configures the `overlay` kernel module to load at boot.
+- `echo "br_netfilter" | sudo tee -a /etc/modules-load.d/containerd.conf`: Configures the `br_netfilter` module for networking.
+- `modprobe overlay`: Loads the `overlay` kernel module immediately.
+- `modprobe br_netfilter`: Loads the `br_netfilter` module immediately.
+
+#### Configure Sysctl for Networking
+- `echo "net.bridge.bridge-nf-call-ip6tables = 1" | sudo tee -a /etc/sysctl.d/kubernetes.conf`: Enables bridge IPv6 traffic to be processed by iptables.
+- `echo "net.bridge.bridge-nf-call-iptables = 1" | sudo tee -a /etc/sysctl.d/kubernetes.conf`: Enables bridge IPv4 traffic to be processed by iptables.
+- `echo "net.ipv4.ip_forward = 1" | sudo tee -a /etc/sysctl.d/kubernetes.conf`: Enables IPv4 forwarding.
+- `sysctl --system`: Applies all the sysctl settings immediately.
+
+#### Install and Configure Containerd
+- `curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmour -o /etc/apt/trusted.gpg.d/docker.gpg`: Adds Docker's GPG key for secure package installation.
+- `add-apt-repository "deb [arch=amd64] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable"`: Adds Docker's repository.
+- `apt update`: Updates the package index to include Docker's repository.
+- `apt install -y containerd.io`: Installs the Containerd runtime.
+- `containerd config default | tee /etc/containerd/config.toml >/dev/null 2>&1`: Generates a default configuration for Containerd.
+- `sed -i 's/SystemdCgroup \= false/SystemdCgroup \= true/g' /etc/containerd/config.toml`: Configures Containerd to use systemd as the cgroup driver.
+- `systemctl restart containerd`: Restarts the Containerd service.
+- `systemctl enable --now containerd`: Enables and starts the Containerd service.
+
+#### Install Kubernetes Tools
+- `apt-get install -y apt-transport-https ca-certificates curl gpg`: Installs required dependencies.
+- `curl -fsSL https://pkgs.k8s.io/core:/stable:/v1.30/deb/Release.key | sudo gpg --dearmor -o /etc/apt/keyrings/kubernetes-apt-keyring.gpg`: Adds Kubernetes' GPG key for secure package installation.
+- `echo 'deb [signed-by=/etc/apt/keyrings/kubernetes-apt-keyring.gpg] https://pkgs.k8s.io/core:/stable:/v1.30/deb/ /' | sudo tee /etc/apt/sources.list.d/kubernetes.list`: Adds Kubernetes' repository.
+- `apt-get update`: Updates the package index to include Kubernetes' repository.
+- `apt-get install -y kubelet kubeadm kubectl`: Installs Kubernetes tools (`kubelet`, `kubeadm`, and `kubectl`).
+- `apt-mark hold kubelet kubeadm kubectl`: Prevents the Kubernetes tools from being updated automatically.
+- `systemctl enable --now kubelet`: Enables and starts the Kubernetes Kubelet service.
+
+This setup ensures the system is ready for a Kubernetes cluster deployment using `kubeadm`.
+
+# Kubeadm init
+
+In my case I was using 192.168.x.x as my local network so I could not use the normal init
 
 ```bash
-pveum role add TerraformProv -privs "Datastore.AllocateSpace Datastore.Audit Pool.Allocate Sys.Audit Sys.Console Sys.Modify VM.Allocate VM.Audit VM.Clone VM.Config.CDROM VM.Config.Cloudinit VM.Config.CPU VM.Config.Disk VM.Config.HWType VM.Config.Memory VM.Config.Network VM.Config.Options VM.Migrate VM.Monitor VM.PowerMgmt"
-pveum user add terraform-prov@pve --password <password>
-pveum aclmod / -user terraform-prov@pve -role TerraformProv
+sudo kubeadm init --pod-network-cidr=10.244.0.0/16
 ```
-## Exporting ENV variables for provider in your terraform host
+## Set up kubectl
 
 ```bash
-export PM_USER="terraform-prov@pve"
-export PM_PASS="password"
+mkdir -p $HOME/.kube
+sudo cp -i /etc/kubernetes/admin.conf $HOME/.kube/config
+sudo chown $(id -u):$(id -g) $HOME/.kube/config
+source <(kubectl completion bash)
+echo "source <(kubectl completion bash)" >> ~/.bashrc
+echo "alias k='kubectl'" >> ~/.bashrc
+complete -o default -F __start_kubectl k
 ```
 
-https://github.com/Telmate/terraform-provider-proxmox/blob/master/docs/guides/cloud_init.md
+## Network plugin
+kubectl apply -f https://raw.githubusercontent.com/projectcalico/calico/v3.25.0/manifests/calico.yaml
 
-https://github.com/kodekloudhub/certified-kubernetes-administrator-course/blob/master/docs/11-Install-Kubernetes-the-kubeadm-way/04-Demo-Deployment-with-Kubeadm.md
+## Reset kubeadm in case anything to strange (always check the network specially if using cloud init images)
 
-https://austinsnerdythings.com/2021/09/23/deploying-kubernetes-vms-in-proxmox-with-terraform/
+```bash
+sudo kubeadm reset
+sudo rm -rf /etc/kubernetes/
+sudo rm -rf /var/lib/etcd /var/lib/kubelet /var/lib/dockershim
+sudo rm -rf /var/lib/cni /run/cni /etc/cni/net.d
+sudo rm -rf /var/log/pods /var/log/containers
+sudo systemctl restart containerd
+sudo systemctl restart kubelet
 
-https://austinsnerdythings.com/2022/04/25/deploying-a-kubernetes-cluster-within-proxmox-using-ansible/
+sudo kubeadm init --pod-network-cidr=10.244.0.0/16
+```
+
+# References used for terraform provider
+https://www.trfore.com/posts/provisioning-proxmox-8-vms-with-terraform-and-bpg/
