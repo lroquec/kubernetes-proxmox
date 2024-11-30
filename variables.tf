@@ -12,5 +12,5 @@ variable "proxmox_host" {
   default = "pve2"
 }
 variable "template_name" {
-  default = "ubuntu-2404-cloudinit-template"
+  default = "ubuntu-2404-tpl"
 }
