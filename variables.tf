@@ -11,6 +11,6 @@ variable "ssh_key" {
 variable "proxmox_host" {
   default = "pve2"
 }
-variable "template_name" {
-  default = "ubuntu-2404-tpl"
+variable "template_id" {
+  default = 9000
 }
