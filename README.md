@@ -235,3 +235,6 @@ sudo kubeadm init --pod-network-cidr=10.244.0.0/16
 https://www.trfore.com/posts/provisioning-proxmox-8-vms-with-terraform-and-bpg/
 https://github.com/Telmate/terraform-provider-proxmox/blob/master/docs/guides/cloud-init%20getting%20started.md
 https://hbayraktar.medium.com/how-to-install-kubernetes-cluster-on-ubuntu-22-04-step-by-step-guide-7dbf7e8f5f99
+
+## To do
+Rewrite for using terraform also for template generation and snippet creation.
