@@ -237,4 +237,4 @@ https://github.com/Telmate/terraform-provider-proxmox/blob/master/docs/guides/cl
 https://hbayraktar.medium.com/how-to-install-kubernetes-cluster-on-ubuntu-22-04-step-by-step-guide-7dbf7e8f5f99
 
 ## To do
-Rewrite for using terraform also for template generation and snippet creation.
+Refactor for using terraform also for template generation and snippet creation.
