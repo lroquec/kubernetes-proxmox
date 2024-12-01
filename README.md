@@ -51,8 +51,13 @@ Now that we have the Cloud-Init image imported, we can create a template from th
 ```bash
 qm template 9000
 ```
+### Generate the password for the user we will set up wih cloud-init and have it at hand
 
-## Creating a Snippet for installing and configuring requirements for a kubeadm successful installation.
+```bash
+openssl passwd -6 "your_password"
+```
+
+## Creating a Snippet for VM initialization and installing and configuring requirements for a kubeadm successful installation.
 
 Snippets are used to pass additional configuration to the Cloud-Init package. Before we can create a snippet, we need to create a place to store it. Preferably in the same storage as the template. Do keep in mind that the cloned VMs can't start if the snippet is not accessible. Throughout this guide we will use the `local` storage on Proxmox node.
 
@@ -115,7 +120,24 @@ runcmd:
   - systemctl enable --now kubelet
 EOF
 ```
-### Explanation of Commands for Kubernetes Setup on Ubuntu
+## Snippet break down
+
+### User Configuration
+Creates a user named `laura` with the following settings:
+- **Full Name**: Laura
+- **Shell**: `/bin/bash`
+- **Sudo Access**: Passwordless sudo for all commands (`NOPASSWD`)
+- **Password**: We have this from previous step `Generate the password...`
+- **SSH Access**: Adds a specified SSH public key for secure remote access
+
+### Password Management
+- Password expiration is disabled: `expire: false`
+
+### Hostname and Host File Management
+- Hostname changes during initialization are allowed: `preserve_hostname: false`
+- The `/etc/hosts` file is automatically managed by cloud-init: `manage_etc_hosts: true`
+
+### Commands in runcmd
 
 Below is a detailed explanation of the commands used for preparing a system to install Kubernetes with `kubeadm`:
 
@@ -166,6 +188,13 @@ Below is a detailed explanation of the commands used for preparing a system to i
 
 This setup ensures the system is ready for a Kubernetes cluster deployment using `kubeadm`.
 
+# Run Terraform
+
+```bash
+terraform init
+terraform apply
+```
+
 # Kubeadm init
 
 In my case I was using 192.168.x.x as my local network so I could not use the normal init
@@ -202,5 +231,7 @@ sudo systemctl restart kubelet
 sudo kubeadm init --pod-network-cidr=10.244.0.0/16
 ```
 
-# References used for terraform provider
+#### References used
 https://www.trfore.com/posts/provisioning-proxmox-8-vms-with-terraform-and-bpg/
+https://github.com/Telmate/terraform-provider-proxmox/blob/master/docs/guides/cloud-init%20getting%20started.md
+https://hbayraktar.medium.com/how-to-install-kubernetes-cluster-on-ubuntu-22-04-step-by-step-guide-7dbf7e8f5f99
