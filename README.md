@@ -76,9 +76,9 @@ users:
     shell: /bin/bash
     sudo: ALL=(ALL) NOPASSWD:ALL
     lock_passwd: false
-    passwd: pass ## hash generado con openssl passwd -6 "tu_contraseña"
+    passwd: pass ## hash generated with openssl passwd -6 "your_password"
     ssh_authorized_keys: 
-      - ssh-ed25519 resto de tu llave publica
+      - ssh-ed25519 rest of your public key
  
 chpasswd:
   expire: false
