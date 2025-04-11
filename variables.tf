@@ -9,7 +9,7 @@ variable "ssh_key" {
 }
 
 variable "proxmox_host" {
-  default = "pve2"
+  default = "pve02"
 }
 variable "template_id" {
   default = 9000
