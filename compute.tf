@@ -1,5 +1,5 @@
 resource "proxmox_virtual_environment_vm" "k8s-servers" {
-  count     = 1
+  count     = 3
   vm_id     = "80${count.index + 1}"
   name      = "kubeadm-vm-${count.index + 1}"
   node_name = var.proxmox_host
